@@ -21,6 +21,17 @@ class Ai():
         }
 
         return coordinates
+    
+    def __index_to_coordinates(self, index):
+        size = self.__board_size
+        c = {
+            "x": index % size,
+            "y": int(index / size)
+        }
+        # Make sure that index is transformed correctly
+        assert c["y"]*size+c["x"] == index
+
+        return c
 
     def __best_valid_prediction(self, prediction, board):
         # Loop once at most to avoid infinite loop
