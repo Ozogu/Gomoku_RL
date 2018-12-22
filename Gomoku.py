@@ -8,29 +8,56 @@ sys.path.insert(0, os.path.abspath(''))
 from Ai import Ai
 
 class Gomoku():
-    def __init__(self, size, state="play", Ai=None, gui=True):
-        self.__mainwindow = Tk()
-        self.__mainwindow.title("Gomoku")
-
+    def __init__(self, size, state="play", AiDefault=None, AiTrainPartner=None):
         # variables
-        self.__gui = gui or state!="train"
         self.__board_size = size
         self.__turn_counter = 0
         self.__player = 1
+        self.__state = state
+        self.__winner = 0
+        self.__game_number = 1
         self.__player_names = ['Player', "Ai"] if state=="play" else ["Ai1", "Ai2"]
-        self.__board_snapshot = np.zeros((size,size))
-        self.__Ai = Ai
+        self.__board_snapshot = np.zeros((size,size), dtype=np.int8)
+        self.__AiDefault = AiDefault
+        self.__AiTrainPartner = AiTrainPartner
 
+        self.render_mainwindow()
+
+        if (re.match(r"ai(\d)?", self.__player_names[self.__player-1].lower())):
+            while True:
+                self.ai_turn()
+                if (self.__winner):
+                    print(f"Game {self.__game_number}, winner {self.__winner}")
+                    self.__AiDefault.new_game()
+                    # self.__AiTrainPartner.new_game()
+
+                    if (self.__game_number % 10 == 0):
+                        print("Training....")
+                        self.__AiDefault.train()
+                        # self.__AiTrainPartner.train()
+
+                    self.__winner = 0
+                    self.__turn_counter = 0
+                    self.__player = 1
+                    self.__board_snapshot = np.zeros((size,size), dtype=np.int8)
+                    self.__game_number += 1
+
+                    self.__mainwindow.destroy()
+                    self.render_mainwindow()
+        else:
+            self.__mainwindow.mainloop()
+
+    def render_mainwindow(self):
+        self.__mainwindow = Tk()
+        self.__mainwindow.title("Gomoku")
+
+        
         # Creating labels
         self.__status = Label(self.__mainwindow,text=self.__player_names[self.__player-1])
         self.__turn_counter_label = Label(self.__mainwindow,text=
                             "{}. Turns taken".format(self.__turn_counter))
 
-        # Placing label
-        self.__status.grid(row=0,column=0,columnspan=4)
-        self.__turn_counter_label.grid(row=0,column=4,columnspan=4)
-
-        # Creating board
+        # Create board
         self.__board = []
         for size_x in range(self.__board_size):
             board_x = []
@@ -45,11 +72,10 @@ class Gomoku():
                 board_x.append(button)
             self.__board.append(board_x)
 
-        if (gui):
-            if (re.match(self.__player_names[self.__player-1].lower(), 'ai')):
-                self.ai_turn()
-            else:
-                self.__mainwindow.mainloop()
+        # Placing label
+        self.__status.grid(row=0,column=0,columnspan=4)
+        self.__turn_counter_label.grid(row=0,column=4,columnspan=4)
+
 
     def take_turn(self,x,y):
         """
@@ -70,17 +96,23 @@ class Gomoku():
                 return
         # Update board
         self.__board[x][y].update()
-        self.__board_snapshot[x][y] = self.__player
         self.end_turn()
 
     def ai_turn(self):
-        data = { "snapshot": self.__board_snapshot, "player": self.__player }
-        coordinates = self.__Ai.predict()
+        ai = self.__AiDefault
+        # if self.__player == 2:
+        #     ai = self.__AiDefault
+        # else:
+        #     ai = self.__AiTrainPartner
+        data = { "board": self.__board_snapshot, "player": self.__player }
+        coordinates = ai.predict(data)
         self.take_turn(coordinates["x"], coordinates["y"])
 
     def place_token(self, token, symbol, x, y):
         self.__board[x][y].config(state=DISABLED, background=token, text=symbol)
-        self.__board_snapshot[x][y] = self.__player-1
+        # Snapshot is a matrix, hence coordinates are the wrong way.
+        assert self.__board_snapshot[y][x] == 0
+        self.__board_snapshot[y][x] = self.__player
         # Return if win condition met
         return self.check_win_condition(token, [x, y])
 
@@ -97,8 +129,10 @@ class Gomoku():
             (self.__turn_counter)
         self.__turn_counter_label.update()
 
-        if (re.match(self.__player_names[self.__player-1].lower(), 'ai')):
-            self.ai_turn()
+        # This will cause stackoverflow in training.
+        if (self.__state == "play" and re.match(r"ai(\d)?", self.__player_names[self.__player-1].lower())):
+             self.ai_turn()
+            
 
     def check_win_condition(self,token,coordinate):
         """
@@ -133,7 +167,8 @@ class Gomoku():
             self.__status["text"] = ""
             self.__status.update()
             self.__turn_counter_label.update()
-            showerror("Tasapeli","tasapeli!")
+            self.__winner = 3
+            if (self.__state != "train"): showerror("Draw","Draw!")
             return True
 
     def check_direction(self, token, vector, coordinate):
@@ -193,6 +228,7 @@ class Gomoku():
         self.__turn_counter_label["text"] = self.__player_names[self.__player-1] + " won!"
         self.__status["text"] = ""
         self.__status.update()
+        self.__winner = self.__player
 
         # Disable buttons
         for x_buttons in range(len(self.__board)):
@@ -201,11 +237,9 @@ class Gomoku():
         self.__turn_counter_label.update()
 
         # Declare winner
-        showerror("Winner", self.__player_names[self.__player-1] + " won!")
+        if (self.__state != "train"): showerror("Winner", self.__player_names[self.__player-1] + " won!")
 
 def main():
-    # ai = [Ai(), Ai()]
-    ai = Ai()
-    Gomoku(size=25, state="play", Ai=ai)
+    Gomoku(size=25, state="train", AiDefault=Ai(), AiTrainPartner=None)#Ai())
 
 main()
