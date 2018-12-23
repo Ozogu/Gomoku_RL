@@ -1,4 +1,4 @@
-from tkinter import *
+from tkinter import Tk, Button, Label, N, W, E, S, DISABLED
 from tkinter.messagebox import showerror
 import numpy as np
 import re
@@ -28,13 +28,27 @@ class Gomoku():
                 self.ai_turn()
                 if (self.__winner):
                     print(f"Game {self.__game_number}, winner {self.__winner}")
-                    self.__AiDefault.new_game()
-                    # self.__AiTrainPartner.new_game()
+                    rewards = {"default": 0, "partner": 0}
+                    if (self.__winner == 1):
+                        rewards["default"] = -2
+                        rewards["partner"] = 2
+                    elif (self.__winner == 2):
+                        rewards["default"] = 2
+                        rewards["partner"] = -2
+                    elif (self.__winner == 3):
+                        rewards["default"] = -1
+                        rewards["partner"] = -1
 
-                    if (self.__game_number % 10 == 0):
-                        print("Training....")
+                    self.__AiDefault.reward(rewards["default"])
+                    self.__AiDefault.new_game()
+
+                    self.__AiTrainPartner.reward(rewards["partner"])
+                    self.__AiTrainPartner.new_game()
+
+                    if (self.__game_number % AiDefault.batch_size == 0):
+                        print("Learning....")
                         self.__AiDefault.train()
-                        # self.__AiTrainPartner.train()
+                        self.__AiTrainPartner.train()
 
                     self.__winner = 0
                     self.__turn_counter = 0
@@ -99,11 +113,11 @@ class Gomoku():
         self.end_turn()
 
     def ai_turn(self):
-        ai = self.__AiDefault
-        # if self.__player == 2:
-        #     ai = self.__AiDefault
-        # else:
-        #     ai = self.__AiTrainPartner
+        ai = None
+        if self.__player == 2:
+            ai = self.__AiDefault
+        else:
+            ai = self.__AiTrainPartner
         data = { "board": self.__board_snapshot, "player": self.__player }
         coordinates = ai.predict(data)
         self.take_turn(coordinates["x"], coordinates["y"])
@@ -240,6 +254,6 @@ class Gomoku():
         if (self.__state != "train"): showerror("Winner", self.__player_names[self.__player-1] + " won!")
 
 def main():
-    Gomoku(size=25, state="train", AiDefault=Ai(), AiTrainPartner=None)#Ai())
+    Gomoku(size=25, state="train", AiDefault=Ai(), AiTrainPartner=Ai())
 
 main()
