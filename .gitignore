@@ -1,2 +1,5 @@
 events*
 *.log
+__pycache__
+events*
+.vscode

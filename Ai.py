@@ -16,14 +16,12 @@ class Ai():
         self.__episodes = []
         self.__episode = { "observations": [], "actions": [], "reward": 0 }
 
-        self.__model_dir = "model"
+        self.__model_path = "./model/"
+        self.__model_name = "model"
         self.__board_size = 25
-        # self.__tensorboard()
-        self.__session = tf.Session()
-        self.__saver = tf.train.Saver(max_to_keep=8)
+        self.__tensorboard()
+        self.__session = None
         self.__load_model()
-        init = tf.global_variables_initializer()
-        self.__session.run(init)
 
     def new_game(self):
         self.__episodes.append(self.__episode)
@@ -159,24 +157,52 @@ class Ai():
 
         x_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.__layer_out, labels=self.__output)
         self.__loss = tf.reduce_mean(self.__rewards * x_entropy, name="loss")
-        self.__training_optimizer = tf.train.AdamOptimizer(self.__learning_rate).minimize(self.__loss)
+        self.__training_optimizer = tf.train.AdamOptimizer(self.__learning_rate).minimize(self.__loss, name="optimizer")
 
         init = tf.global_variables_initializer()
         self.__session.run(init)
 
 
     def __load_model(self):
-        if (os.path.isfile(self.__model_dir)):
-            self.__saver = tf.train.import_meta_graph(self.__model_dir + '-1000.meta')
-            self.__saver.restore(self.__session, tf.train.latest_checkpoint('./'))
-            #tf.saved_model.loader.load(self.__session, tag_constants.SERVING, self.__model_dir)
+        if (os.path.isfile(self.__model_path + self.__model_name + '.meta')):
+            tf.reset_default_graph()
+            if (self.__session is not None): self.__session.close()
+            self.__session = tf.Session()
+
+            # Load values
+            saver = tf.train.import_meta_graph(self.__model_path + self.__model_name + '.meta')
+            saver.restore(self.__session, tf.train.latest_checkpoint(self.__model_path))
+            
+            # save variables
+            self.__input = tf.get_collection("input")[0]
+            self.__output = tf.get_collection("output")[0] 
+            self.__rewards = tf.get_collection("rewards")[0] 
+            self.__layer_out = tf.get_collection("output_layer")[0] 
+            self.__sigout = tf.get_collection("scaled_output")[0] 
+            self.__loss = tf.get_collection("loss")[0]
+            self.__training_optimizer = tf.get_collection('optimizer')[0]
+
+            #tf.saved_model.loader.load(self.__session, tag_constants.SERVING, self.__model_path)
         else:
             self.__architechture()
+            self.__session = tf.Session()
+            init = tf.global_variables_initializer()
+            self.__session.run(init)
+
+            # Save meta if new architecture created
             self.__save_model(save_meta=True)
 
     def __save_model(self, save_meta=False):
-        self.__saver.save(self.__session, self.__model_dir, write_meta_graph=save_meta)
-        # tf.saved_model.simple_save(self.__session, self.__model_dir, { "self.__input": self.__input }, { "self.__output": self.__output })
+        saver = tf.train.Saver()
+        tf.add_to_collection("input", self.__input) 
+        tf.add_to_collection("output", self.__output) 
+        tf.add_to_collection("rewards", self.__rewards) 
+        tf.add_to_collection("output_layer", self.__layer_out) 
+        tf.add_to_collection("scaled_output", self.__sigout) 
+        tf.add_to_collection("loss", self.__loss) 
+        tf.add_to_collection('optimizer', self.__training_optimizer)
+        saver.save(self.__session, self.__model_path + self.__model_name, write_meta_graph=save_meta)
+        # tf.saved_model.simple_save(self.__session, self.__model_path, { "self.__input": self.__input }, { "self.__output": self.__output })
 
 if __name__ == "__main__":
     ai = Ai()
