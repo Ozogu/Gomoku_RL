@@ -56,10 +56,17 @@ class Gomoku():
                     self.__board_snapshot = np.zeros((size,size), dtype=np.int8)
                     self.__game_number += 1
 
-                    self.__mainwindow.destroy()
-                    self.render_mainwindow()
+                    # self.render_mainwindow()
+                    self.reset_mainwindow()
         else:
             self.__mainwindow.mainloop()
+
+    def reset_mainwindow(self):
+        size = self.__board_size
+        for i in range(0,size**2):
+            x = i % size
+            y =int(i / size)
+            self.__board[x][y].config(text="",background="SystemButtonFace")
 
     def render_mainwindow(self):
         self.__mainwindow = Tk()

@@ -10,8 +10,8 @@ class Ai():
         # Discount factor
         self.__gamma = 0.95
         self.__learning_rate = 0.0001
-        self.__epochs = 1
-        self.batch_size = 1 # Public
+        self.__epochs = 10
+        self.batch_size = 10 # Public
 
         self.__episodes = []
         self.__episode = { "observations": [], "actions": [], "reward": 0 }
