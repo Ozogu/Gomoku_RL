@@ -263,4 +263,5 @@ class Gomoku():
 def main():
     Gomoku(size=25, state="train", AiDefault=Ai(), AiTrainPartner=Ai())
 
-main()
+if __name__ == "__main__":
+    main()

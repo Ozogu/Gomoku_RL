@@ -5,13 +5,15 @@ import os
 import string
 import random
 
+LOSE, DRAW, WIN = (-2, -1, 2)
+
 class Ai():
     def __init__(self):
         # Discount factor
         self.__gamma = 0.95
         self.__learning_rate = 0.0001
         self.__epochs = 10
-        self.batch_size = 10 # Public
+        self.batch_size = 20 # Public
 
         self.__episodes = []
         self.__episode = { "observations": [], "actions": [], "reward": 0 }
@@ -60,18 +62,26 @@ class Ai():
     def reward(self, reward):
         self.__episode["reward"] = reward
 
-    def __discount_and_normalize_rewards(self, reward, episode_length):
-        rewards = np.zeros(episode_length)
-        rewards[0] = reward
-        discounted_rewards = np.zeros(episode_length)
+    # TODO: This should be in completely another class
+    def calc_reward(self, reward, turns):
+        assert reward in (LOSE, DRAW, WIN)
+        # use -tanh(x/100)+10 for scaled reward and covert to reward sign
+        return np.sign(reward)*(-10*np.tanh(np.abs(reward*turns)/100)+10)
+
+    def __discount_and_normalize_rewards(self, reward, turns):
+        rewards = np.zeros(turns)
+        # Give more carrot or stick based on how fast won or lost.
+        scaled_reward = self.calc_reward(reward, turns)
+        rewards[0] = scaled_reward
+        discounted_rewards = np.zeros(turns)
         cumulative = 0.0
         for index, reward in enumerate(rewards):
             cumulative = cumulative * self.__gamma + reward
             discounted_rewards[index] = cumulative
 
-        mean = np.mean(discounted_rewards)
-        std = np.std(discounted_rewards)
-        discounted_rewards = (discounted_rewards-mean) / std
+        # mean = np.mean(discounted_rewards)
+        # std = np.std(discounted_rewards)
+        # discounted_rewards = (discounted_rewards-mean) / std
 
         return discounted_rewards
     
