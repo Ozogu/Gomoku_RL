@@ -5,7 +5,7 @@ import os
 import string
 import random
 
-LOSE, DRAW, WIN = (-2, -1, 2)
+from shared import LOSE, WIN, DRAW
 
 class Ai():
     def __init__(self):
@@ -21,7 +21,7 @@ class Ai():
         self.__model_path = "./model/"
         self.__model_name = "model"
         self.__board_size = 25
-        self.__tensorboard()
+        # self.__tensorboard()
         self.__session = None
         self.__load_model()
 
