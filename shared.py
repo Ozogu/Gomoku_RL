@@ -1,0 +1,2 @@
+TRAIN, PLAY = (1,2)
+LOSE, DRAW, WIN = (-2, -1, 2)
