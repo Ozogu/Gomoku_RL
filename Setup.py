@@ -63,5 +63,9 @@ class Setup():
         self.__window.destroy()
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     setup = Setup()
     Gomoku(size=25, state=setup.state, AiDefault=Ai(), AiTrainPartner=Ai(), gui=setup.gui)
+=======
+    Setup()
+>>>>>>> 068c27e91116288a49d279b5b8dc2a0acc81a0a9
