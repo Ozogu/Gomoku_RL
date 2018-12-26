@@ -3,3 +3,4 @@ events*
 __pycache__
 events*
 .vscode
+venv

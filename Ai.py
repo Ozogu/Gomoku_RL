@@ -13,7 +13,7 @@ class Ai():
         self.__gamma = 0.95
         self.__learning_rate = 0.0001
         self.__epochs = 10
-        self.batch_size = 20 # Public
+        self.batch_size = 200 # Public
 
         self.__episodes = []
         self.__episode = { "observations": [], "actions": [], "reward": 0 }
@@ -22,7 +22,8 @@ class Ai():
         self.__model_name = "model"
         self.__board_size = 25
         # self.__tensorboard()
-        self.__session = None
+        self.__session = tf.Session()
+        self.__saver = None
         self.__load_model()
 
     def new_game(self):
@@ -34,7 +35,7 @@ class Ai():
         self.__load_model()
         for _ in range(0, self.__epochs):
             for batch in self.__episodes:
-                rewards = self.__discount_and_normalize_rewards(batch["reward"], len(batch["actions"]))
+                rewards = self.discount_and_normalize_rewards(batch["reward"], len(batch["actions"]))
                 self.__session.run([self.__loss, self.__training_optimizer],
                     {
                         self.__input: np.vstack(batch["observations"]),
@@ -68,7 +69,7 @@ class Ai():
         # use -tanh(x/100)+10 for scaled reward and covert to reward sign
         return np.sign(reward)*(-10*np.tanh(np.abs(reward*turns)/100)+10)
 
-    def __discount_and_normalize_rewards(self, reward, turns):
+    def discount_and_normalize_rewards(self, reward, turns):
         rewards = np.zeros(turns)
         # Give more carrot or stick based on how fast won or lost.
         scaled_reward = self.calc_reward(reward, turns)
@@ -78,7 +79,8 @@ class Ai():
         for index, reward in enumerate(rewards):
             cumulative = cumulative * self.__gamma + reward
             discounted_rewards[index] = cumulative
-
+			
+        discounted_rewards = np.flip(discounted_rewards)
         # mean = np.mean(discounted_rewards)
         # std = np.std(discounted_rewards)
         # discounted_rewards = (discounted_rewards-mean) / std
@@ -139,30 +141,34 @@ class Ai():
 
     def __architechture(self):
         # self.__scope = "".join(random.choices(string.ascii_uppercase, k=8))
-        layer_neurons = [self.__board_size**2, 256, 256, self.__board_size**2]
+        layer_neurons = [self.__board_size**2, 512, 512, 512, self.__board_size**2]
 
         # with tf.variable_scope(self.__scope):
         self.__input = tf.placeholder(shape=[None, layer_neurons[0]], dtype=tf.float32, name="input")
-        self.__output = tf.placeholder(shape=[None, layer_neurons[3]], dtype=tf.int32, name="output")
+        self.__output = tf.placeholder(shape=[None, layer_neurons[4]], dtype=tf.int32, name="output")
         self.__rewards = tf.placeholder(shape=[None,], dtype=tf.float32, name="rewards")
 
         weights = [
             tf.Variable(tf.random_normal([layer_neurons[0], layer_neurons[1]])),
             tf.Variable(tf.random_normal([layer_neurons[1], layer_neurons[2]])),
-            tf.Variable(tf.random_normal([layer_neurons[2], layer_neurons[3]]))
+            tf.Variable(tf.random_normal([layer_neurons[2], layer_neurons[3]])),
+            tf.Variable(tf.random_normal([layer_neurons[3], layer_neurons[4]]))
         ]
         biases = [
             tf.Variable(tf.random_normal([layer_neurons[1]])),
             tf.Variable(tf.random_normal([layer_neurons[2]])),
-            tf.Variable(tf.random_normal([layer_neurons[3]]))
+            tf.Variable(tf.random_normal([layer_neurons[3]])),
+            tf.Variable(tf.random_normal([layer_neurons[4]]))
         ]
 
         layer_1 = tf.add(tf.matmul(self.__input, weights[0]), biases[0])
         layer_1 = tf.nn.relu(layer_1)
         layer_2 = tf.add(tf.matmul(layer_1, weights[1]), biases[1])
         layer_2 = tf.nn.relu(layer_2)
+        layer_3 = tf.add(tf.matmul(layer_2, weights[2]), biases[2])
+        layer_3 = tf.nn.relu(layer_3)
 
-        self.__layer_out = tf.add(tf.matmul(layer_2, weights[2]), biases[2], name="output_layer")
+        self.__layer_out = tf.add(tf.matmul(layer_3, weights[3]), biases[3], name="output_layer")
         self.__sigout = tf.nn.sigmoid(self.__layer_out, name="scaled_output")
 
         x_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.__layer_out, labels=self.__output)
@@ -175,13 +181,13 @@ class Ai():
 
     def __load_model(self):
         if (os.path.isfile(self.__model_path + self.__model_name + '.meta')):
-            tf.reset_default_graph()
-            if (self.__session is not None): self.__session.close()
-            self.__session = tf.Session()
+            # tf.reset_default_graph()
+            # if (self.__session is not None): self.__session.close()
+            # self.__session = tf.Session()
 
-            # Load values
-            saver = tf.train.import_meta_graph(self.__model_path + self.__model_name + '.meta')
-            saver.restore(self.__session, tf.train.latest_checkpoint(self.__model_path))
+            if self.__saver is None:
+                self.__saver = tf.train.import_meta_graph(self.__model_path + self.__model_name + '.meta')
+            self.__saver.restore(self.__session, tf.train.latest_checkpoint(self.__model_path))
             
             # save variables
             self.__input = tf.get_collection("input")[0]
@@ -194,16 +200,15 @@ class Ai():
 
             #tf.saved_model.loader.load(self.__session, tag_constants.SERVING, self.__model_path)
         else:
+            # self.__session = tf.Session()
             self.__architechture()
-            self.__session = tf.Session()
-            init = tf.global_variables_initializer()
-            self.__session.run(init)
 
             # Save meta if new architecture created
             self.__save_model(save_meta=True)
 
     def __save_model(self, save_meta=False):
-        saver = tf.train.Saver()
+        if self.__saver is None:
+            self.__saver = tf.train.Saver()
         tf.add_to_collection("input", self.__input) 
         tf.add_to_collection("output", self.__output) 
         tf.add_to_collection("rewards", self.__rewards) 
@@ -211,7 +216,7 @@ class Ai():
         tf.add_to_collection("scaled_output", self.__sigout) 
         tf.add_to_collection("loss", self.__loss) 
         tf.add_to_collection('optimizer', self.__training_optimizer)
-        saver.save(self.__session, self.__model_path + self.__model_name, write_meta_graph=save_meta)
+        self.__saver.save(self.__session, self.__model_path + self.__model_name, write_meta_graph=save_meta)
         # tf.saved_model.simple_save(self.__session, self.__model_path, { "self.__input": self.__input }, { "self.__output": self.__output })
 
 if __name__ == "__main__":
