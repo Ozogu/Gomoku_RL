@@ -1,25 +1,36 @@
 import tensorflow as tf
-from tensorflow.python.saved_model import tag_constants
 import numpy as np
 import os
 import string
 import random
+import time
 
 from shared import LOSE, WIN, DRAW
 
 class Ai():
-    def __init__(self):
+    def __init__(self, keep_prob = 1, greedy=True, epsilon=0, verbose=False):
+        assert(greedy in (True, False))
+        assert(verbose in (True, False))
+        assert(0 <= keep_prob <= 1)
+        assert(0 <= epsilon <= 1)
+
         # Discount factor
-        self.__gamma = 0.95
-        self.__learning_rate = 0.0001
-        self.__epochs = 10
-        self.batch_size = 200 # Public
+        self.__gamma = 0.99
+        self.__learning_rate = 0.00001
+        self.__keep_prob = keep_prob
+        self.__greedy = greedy
+        self.__epochs = 1
+        self.__epsilon = epsilon
+        self.batch_size = 128 # Public
 
         self.__episodes = []
         self.__episode = { "observations": [], "actions": [], "reward": 0 }
 
         self.__model_path = "./model/"
         self.__model_name = "model"
+        self.__verbose = verbose
+        if verbose:
+            np.set_printoptions(precision=3, suppress=True, threshold=np.nan, linewidth=np.nan)
         self.__board_size = 25
         # self.__tensorboard()
         self.__session = tf.Session()
@@ -35,12 +46,13 @@ class Ai():
         self.__load_model()
         for _ in range(0, self.__epochs):
             for batch in self.__episodes:
-                rewards = self.discount_and_normalize_rewards(batch["reward"], len(batch["actions"]))
+                rewards = self.discount(batch["reward"], len(batch["actions"]))
                 self.__session.run([self.__loss, self.__training_optimizer],
                     {
                         self.__input: np.vstack(batch["observations"]),
                         self.__output: np.stack(batch["actions"]),
-                        self.__rewards: rewards
+                        self.__rewards: rewards,
+                        self.__dropout: self.__keep_prob
                     }
                 )
         
@@ -48,15 +60,23 @@ class Ai():
         self.__episodes = []
 
     def predict(self, data):
-        board = self.__preprocess(data)
-        prediction = self.__session.run(self.__sigout, { self.__input: board })
-        best_valid_index = self.__best_valid_prediction(prediction, board)
-        coordinates = self.__index_to_coordinates(best_valid_index)
+        input_board, output_board = self.__preprocess(data)
+        prediction = self.__session.run(self.__softmax, { self.__input: input_board })
+        best_valid_index = self.__best_valid_prediction(prediction, output_board)
+        coordinates = self.__index_to_coordinates(best_valid_index)        
 
-        self.__episode["observations"].append(board)
+        self.__episode["observations"].append(input_board)
         action = np.zeros(self.__board_size**2)
         action[best_valid_index] = 1
         self.__episode["actions"].append(action)
+
+        if (self.__verbose):
+            print('-'*80)
+            print('-'*80)
+            print('Board')
+            print(np.reshape(output_board, (25,25)))
+            print('Prediction')
+            print(np.reshape(prediction, (25,25)))
 
         return coordinates
 
@@ -66,10 +86,10 @@ class Ai():
     # TODO: This should be in completely another class
     def calc_reward(self, reward, turns):
         assert reward in (LOSE, DRAW, WIN)
-        # use -tanh(x/100)+10 for scaled reward and covert to reward sign
-        return np.sign(reward)*(-10*np.tanh(np.abs(reward*turns)/100)+10)
+        # use -tanh(x/100)+3 for scaled reward and covert to reward sign
+        return np.sign(reward)*(-2*np.tanh(np.abs(reward*turns)/100)+3)
 
-    def discount_and_normalize_rewards(self, reward, turns):
+    def discount(self, reward, turns):
         rewards = np.zeros(turns)
         # Give more carrot or stick based on how fast won or lost.
         scaled_reward = self.calc_reward(reward, turns)
@@ -81,9 +101,6 @@ class Ai():
             discounted_rewards[index] = cumulative
 			
         discounted_rewards = np.flip(discounted_rewards)
-        # mean = np.mean(discounted_rewards)
-        # std = np.std(discounted_rewards)
-        # discounted_rewards = (discounted_rewards-mean) / std
 
         return discounted_rewards
     
@@ -102,19 +119,29 @@ class Ai():
 
     def __best_valid_prediction(self, prediction, board):
         # Remove invalid actions
-        prediction[board != 0] = 0
+        # prediction[board != 0] = 0
 
-        # Choose randomly among the most confident choices
-        indexes = np.where(prediction == np.max(prediction))[1]
-        index = np.random.choice(indexes)
+        index = 0
+        if (self.__greedy):
+            # Take first best
+            # index = np.where(prediction == np.max(prediction))[1][0]
+            # Take one of the best
+            indexes = np.where(prediction == np.max(prediction))[1]
+            index = np.random.choice(indexes)
+        else: # Boltzman approach
+            if (self.__epsilon <= random.random()):
+                # normalized = prediction[0]/prediction[0].sum()
+                index = np.random.choice(list(range(prediction.size)), p=prediction[0])
+            else: # e-greedy approach
+                index = np.random.choice(np.where(board == 0)[1])
 
         # If there is no mark at the predicted location, it is the best valid prediction
         if board[0][index] == 0:
             return index
         else:
             try:
-                # If for some reason, no valid points have been played, just play the first open slot.
-                return np.where(board[0] == 0)[0][0]
+                # If invalid spot, play random.
+                return np.random.choice(np.where(board == 0)[1])
             except IndexError:
                 np.savetxt("board.log", np.reshape(board, (self.__board_size, self.__board_size)), "%d")
                 raise IndexError("Every slot has been played!")
@@ -130,50 +157,40 @@ class Ai():
         board = np.copy(data["board"])
         if data["player"] == 2:
             # AI plays as player 1. Inverse board
-            board[board == 2] = 3
-            board[board == 1] = 2
-            board[board == 3] = 1
+            board[board == 1] = -1
+            board[board == 2] = 1
+        elif data["player"] == 1:
+            board[board == 2] = -1
 
+        # Input board reshaped to 4d for tensorflow convolution
+        input_board = board[np.newaxis, ..., np.newaxis]
+        output_board = np.reshape(board, (1, self.__board_size**2))
 
-        reshaped_board = np.reshape(board, (1,self.__board_size**2))
-
-        return reshaped_board
+        return input_board, output_board
+        
 
     def __architechture(self):
-        # self.__scope = "".join(random.choices(string.ascii_uppercase, k=8))
-        layer_neurons = [self.__board_size**2, 512, 512, 512, self.__board_size**2]
+        self.__input = tf.placeholder(shape=(None, self.__board_size, self.__board_size, 1), dtype=tf.float32)
+        self.__output = tf.placeholder(shape=(None, self.__board_size**2), dtype=tf.int32)
+        self.__rewards = tf.placeholder(shape=(None,), dtype=tf.float32)
+        self.__dropout = tf.placeholder(dtype=tf.float32)
 
-        # with tf.variable_scope(self.__scope):
-        self.__input = tf.placeholder(shape=[None, layer_neurons[0]], dtype=tf.float32, name="input")
-        self.__output = tf.placeholder(shape=[None, layer_neurons[4]], dtype=tf.int32, name="output")
-        self.__rewards = tf.placeholder(shape=[None,], dtype=tf.float32, name="rewards")
+        layer_1 = tf.layers.conv2d(self.__input, filters=32, kernel_size=10, activation=tf.nn.relu, padding='valid')
+        layer_1 = tf.layers.dropout(layer_1, self.__dropout)
 
-        weights = [
-            tf.Variable(tf.random_normal([layer_neurons[0], layer_neurons[1]])),
-            tf.Variable(tf.random_normal([layer_neurons[1], layer_neurons[2]])),
-            tf.Variable(tf.random_normal([layer_neurons[2], layer_neurons[3]])),
-            tf.Variable(tf.random_normal([layer_neurons[3], layer_neurons[4]]))
-        ]
-        biases = [
-            tf.Variable(tf.random_normal([layer_neurons[1]])),
-            tf.Variable(tf.random_normal([layer_neurons[2]])),
-            tf.Variable(tf.random_normal([layer_neurons[3]])),
-            tf.Variable(tf.random_normal([layer_neurons[4]]))
-        ]
+        layer_2 = tf.layers.conv2d(layer_1, filters=16, kernel_size=5, activation=tf.nn.relu, padding='valid')
+        layer_2 = tf.layers.dropout(layer_2, self.__dropout)
 
-        layer_1 = tf.add(tf.matmul(self.__input, weights[0]), biases[0])
-        layer_1 = tf.nn.relu(layer_1)
-        layer_2 = tf.add(tf.matmul(layer_1, weights[1]), biases[1])
-        layer_2 = tf.nn.relu(layer_2)
-        layer_3 = tf.add(tf.matmul(layer_2, weights[2]), biases[2])
-        layer_3 = tf.nn.relu(layer_3)
+        layer_3 = tf.layers.flatten(layer_2)
+        layer_3 = tf.layers.dense(layer_3, 1024, tf.nn.relu)
+        layer_3 = tf.layers.dropout(layer_3, self.__dropout)
 
-        self.__layer_out = tf.add(tf.matmul(layer_3, weights[3]), biases[3], name="output_layer")
-        self.__sigout = tf.nn.sigmoid(self.__layer_out, name="scaled_output")
+        self.__layer_out = tf.layers.dense(layer_3, self.__board_size**2, activation=None)
+        self.__softmax = tf.nn.softmax(self.__layer_out)
 
         x_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.__layer_out, labels=self.__output)
-        self.__loss = tf.reduce_mean(self.__rewards * x_entropy, name="loss")
-        self.__training_optimizer = tf.train.AdamOptimizer(self.__learning_rate).minimize(self.__loss, name="optimizer")
+        self.__loss = tf.reduce_mean(self.__rewards * x_entropy)
+        self.__training_optimizer = tf.train.AdamOptimizer(self.__learning_rate).minimize(self.__loss)
 
         init = tf.global_variables_initializer()
         self.__session.run(init)
@@ -181,10 +198,6 @@ class Ai():
 
     def __load_model(self):
         if (os.path.isfile(self.__model_path + self.__model_name + '.meta')):
-            # tf.reset_default_graph()
-            # if (self.__session is not None): self.__session.close()
-            # self.__session = tf.Session()
-
             if self.__saver is None:
                 self.__saver = tf.train.import_meta_graph(self.__model_path + self.__model_name + '.meta')
             self.__saver.restore(self.__session, tf.train.latest_checkpoint(self.__model_path))
@@ -194,15 +207,13 @@ class Ai():
             self.__output = tf.get_collection("output")[0] 
             self.__rewards = tf.get_collection("rewards")[0] 
             self.__layer_out = tf.get_collection("output_layer")[0] 
-            self.__sigout = tf.get_collection("scaled_output")[0] 
+            self.__softmax = tf.get_collection("scaled_output")[0] 
             self.__loss = tf.get_collection("loss")[0]
             self.__training_optimizer = tf.get_collection('optimizer')[0]
+            self.__dropout =tf.get_collection('dropout')[0]
 
-            #tf.saved_model.loader.load(self.__session, tag_constants.SERVING, self.__model_path)
         else:
-            # self.__session = tf.Session()
             self.__architechture()
-
             # Save meta if new architecture created
             self.__save_model(save_meta=True)
 
@@ -213,11 +224,12 @@ class Ai():
         tf.add_to_collection("output", self.__output) 
         tf.add_to_collection("rewards", self.__rewards) 
         tf.add_to_collection("output_layer", self.__layer_out) 
-        tf.add_to_collection("scaled_output", self.__sigout) 
+        tf.add_to_collection("scaled_output", self.__softmax) 
         tf.add_to_collection("loss", self.__loss) 
         tf.add_to_collection('optimizer', self.__training_optimizer)
+        tf.add_to_collection('dropout', self.__dropout)
+
         self.__saver.save(self.__session, self.__model_path + self.__model_name, write_meta_graph=save_meta)
-        # tf.saved_model.simple_save(self.__session, self.__model_path, { "self.__input": self.__input }, { "self.__output": self.__output })
 
 if __name__ == "__main__":
     ai = Ai()

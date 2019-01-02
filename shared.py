@@ -1,2 +1,3 @@
 TRAIN, PLAY = (1,2)
 LOSE, DRAW, WIN = (-2, -1, 2)
+GREEDY, BOLTZMANN = (1,0)

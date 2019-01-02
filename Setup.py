@@ -1,7 +1,8 @@
-from tkinter import Tk, Label, Entry, Button, Checkbutton, IntVar, Radiobutton
+from tkinter import Tk, Label, Entry, Button, Checkbutton, IntVar, Radiobutton, Frame, LEFT, RIGHT, X
+
 from tkinter.messagebox import showerror
 
-from shared import TRAIN, PLAY
+from shared import TRAIN, PLAY, GREEDY, BOLTZMANN
 from Gomoku import Gomoku
 from Ai import Ai
 
@@ -11,38 +12,69 @@ class Setup():
         # Init window
         self.__window = Tk()
 
-        self.__radio_var = IntVar()
-        self.__checkbox_var = IntVar()
-        # Init buttons
+        # Vars
+        self.__state_radio_var = IntVar()
+        self.__approach_radio_var = IntVar()
+        self.__gui_checkbox_var = IntVar()
+        self.__verbose_checkbox_var = IntVar()
+
+        # Init elements
         self.__window.title("Game settings")
-        self.__label_model = Label(self.__window, text="Model name")
-        self.__model_name = Entry(self.__window)
-        self.__label_render = Label(self.__window, text="Render game every")
-        self.__render_number = Entry(self.__window)
-        self.__label_gui = Label(self.__window, text="Use Gui")
-        self.__train__radio = Radiobutton(self.__window, text="train", variable=self.__radio_var, value=TRAIN)
-        self.__play__radio = Radiobutton(self.__window, text="play", variable=self.__radio_var, value=PLAY)
-        self.__state = Entry(self.__window)
-        self.__label_gui = Label(self.__window, text="Use Gui")
-        self.__gui_checkbox = Checkbutton(self.__window, variable=self.__checkbox_var)
+
+        self.__approach_frame = Frame(self.__window)
+        self.__greedy_radio = Radiobutton(self.__approach_frame, text="Greedy", variable=self.__approach_radio_var, value=GREEDY)
+        self.__boltzman_radio = Radiobutton(self.__approach_frame, text="Boltzman, e-greedy", variable=self.__approach_radio_var, value=BOLTZMANN)
+
+        self.__epsilon_frame = Frame(self.__window)
+        self.__epsilon_label = Label(self.__epsilon_frame, text="Epsilon")
+        self.__epsilon = Entry(self.__epsilon_frame)
+
+        self.__keep_prob_frame = Frame(self.__window)
+        self.__keep_prob_label = Label(self.__keep_prob_frame, text="Keep probability")
+        self.__keep_prob = Entry(self.__keep_prob_frame)
+
+        self.__gui_frame = Frame(self.__window)
+        self.__label_gui = Label(self.__gui_frame, text="Use Gui")
+        self.__gui_checkbox = Checkbutton(self.__gui_frame, variable=self.__gui_checkbox_var)
+
+        self.__verbose_frame = Frame(self.__window)
+        self.__verbose_label = Label(self.__verbose_frame, text="Verbose")
+        self.__verbose_checkbox = Checkbutton(self.__verbose_frame, variable=self.__verbose_checkbox_var)
+
+        self.__state_frame = Frame(self.__window)
+        self.__train__radio = Radiobutton(self.__state_frame, text="train", variable=self.__state_radio_var, value=TRAIN)
+        self.__play__radio = Radiobutton(self.__state_frame, text="play", variable=self.__state_radio_var, value=PLAY)
+
         self.__ok_button = Button(self.__window, text="Ok", command=self.confirm)
 
         # Defaults
-        self.__model_name.insert(0, "model")
-        self.__state.insert(0, "play")
         self.__gui_checkbox.select()
         self.__play__radio.select()
+        self.__greedy_radio.select()
+        self.__epsilon.insert(0,'0')
+        self.__keep_prob.insert(0,'1')
 
         # Places
-        self.__label_model.grid(row=0, column=0)
-        self.__model_name.grid(row=0, column=1)
-        self.__label_gui.grid(row=2, column=0)
-        self.__gui_checkbox.grid(row=2, column=1)
-        self.__label_render.grid(row=3, column=0)
-        self.__render_number.grid(row=3, column=1)
-        self.__train__radio.grid(row=4, column=0)
-        self.__play__radio.grid(row=4, column=1)
-        self.__ok_button.grid(row=5, column=0)
+        self.__approach_frame.pack(fill=X)
+        self.__greedy_radio.pack(side=LEFT)
+        self.__boltzman_radio.pack(side=RIGHT)
+
+        self.__epsilon_frame.pack(fill=X)
+        self.__epsilon_label.pack(side=LEFT)
+        self.__epsilon.pack(side=RIGHT)
+
+        self.__keep_prob_frame.pack(fill=X)
+        self.__keep_prob_label.pack(side=LEFT)
+        self.__keep_prob.pack(side=RIGHT)
+
+        self.__gui_frame.pack(fill=X)
+        self.__label_gui.pack(side=LEFT)
+        self.__gui_checkbox.pack(side=RIGHT)
+
+        self.__state_frame.pack(fill=X)
+        self.__train__radio.pack(side=LEFT)
+        self.__play__radio.pack(side=RIGHT)
+        self.__ok_button.pack()
 
         # Hotkeys
         self.__window.bind("<Return>", self.confirm)
@@ -50,18 +82,18 @@ class Setup():
         self.__window.mainloop()
 
     def confirm(self, event=""):
-        """
-        Take and return board size from entry
-        :param event: For hotkey
-        """
-        self.gui = self.__checkbox_var.get()
-        self.model = self.__model_name.get()
-        self.state = self.__radio_var.get()
-        self.render = self.__render_number.get()
+        self.gui = self.__gui_checkbox_var.get()
+        self.keep_prob = float(self.__keep_prob.get())
+        self.approach = self.__approach_radio_var.get()
+        self.state = self.__state_radio_var.get()
+        self.epsilon = float(self.__epsilon.get())
+        self.verbose = self.__verbose_checkbox_var.get()
         self.success = True
 
         self.__window.destroy()
 
 if __name__ == "__main__":
     setup = Setup()
-    Gomoku(size=25, state=setup.state, AiDefault=Ai(), AiTrainPartner=Ai(), gui=setup.gui)
+    Ai1 = Ai(keep_prob=setup.epsilon, greedy=setup.approach, verbose=setup.verbose)
+    Ai2 = Ai(keep_prob=setup.epsilon, greedy=setup.approach, verbose=setup.verbose)
+    Gomoku(size=25, state=setup.state, AiDefault=Ai1, AiTrainPartner=Ai2, gui=setup.gui)

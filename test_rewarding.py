@@ -45,7 +45,7 @@ class TestRewarding(unittest.TestCase):
         (WIN, 100),
         ))
     def test_discount(self, reward, turns):
-        discounted_array = self.ai.discount_and_normalize_rewards(reward, turns)
+        discounted_array = self.ai.discount(reward, turns)
         
         previous = 0
         for current in discounted_array:

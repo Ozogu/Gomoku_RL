@@ -265,4 +265,6 @@ class Gomoku():
         if (self.__state == PLAY): showerror("Winner", self.__player_names[self.__player-1] + " won!")
 
 if __name__ == "__main__":
-    Gomoku(size=25, state=TRAIN, AiDefault=Ai(), AiTrainPartner=Ai(), gui=False)
+    Ai1=Ai(keep_prob=.6, greedy=False, epsilon=0.5)
+    Ai2=Ai(keep_prob=.6, greedy=False, epsilon=0.5)
+    Gomoku(size=25, state=TRAIN, AiDefault=Ai1, AiTrainPartner=Ai2, gui=False)
