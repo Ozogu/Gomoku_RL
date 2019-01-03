@@ -67,6 +67,10 @@ class Setup():
         self.__keep_prob_label.pack(side=LEFT)
         self.__keep_prob.pack(side=RIGHT)
 
+        self.__verbose_frame.pack(fill=X)
+        self.__verbose_label.pack(side=LEFT)
+        self.__verbose_checkbox.pack(side=RIGHT)
+
         self.__gui_frame.pack(fill=X)
         self.__label_gui.pack(side=LEFT)
         self.__gui_checkbox.pack(side=RIGHT)
