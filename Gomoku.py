@@ -1,4 +1,4 @@
-from tkinter import Tk, Button, Label, N, W, E, S, DISABLED
+from tkinter import Tk, Button, Label, N, W, E, S, DISABLED, NORMAL
 from tkinter.messagebox import showerror
 import numpy as np
 import re
@@ -28,40 +28,47 @@ class Gomoku():
         else:
             self.__mainwindow.mainloop()
 
+    def __reset_game(self):
+        print(f"Game {self.__game_number}, winner {self.__winner}")
+        rewards = {"default": 0, "partner": 0}
+        if (self.__winner == 1):
+            rewards["default"] = LOSE
+            rewards["partner"] = WIN
+        elif (self.__winner == 2):
+            rewards["default"] = WIN
+            rewards["partner"] = LOSE
+        elif (self.__winner == 3):
+            rewards["default"] = DRAW
+            rewards["partner"] = DRAW
+
+        self.__AiDefault.reward(rewards["default"])
+        self.__AiDefault.new_game()
+
+        if self.__state == TRAIN:
+            self.__AiTrainPartner.reward(rewards["partner"])
+            self.__AiTrainPartner.new_game()
+
+        if (self.__game_number % self.__AiDefault.batch_size == 0):
+            print("Learning....")
+            self.__AiDefault.train()
+            if self.__state == TRAIN:
+                self.__AiTrainPartner.train()
+
+        self.__winner = 0
+        self.__turn_counter = 0
+        self.__player = 1
+        self.__board_snapshot = np.zeros(
+            (self.__board_size, self.__board_size), dtype=np.int8)
+        self.__game_number += 1
+
+        if (self.__gui):
+            self.__reset_mainwindow()
+
     def __play_against_self(self):
         while True:
             self.__ai_turn()
             if (self.__winner):
-                print(f"Game {self.__game_number}, winner {self.__winner}")
-                rewards = {"default": 0, "partner": 0}
-                if (self.__winner == 1):
-                    rewards["default"] = LOSE
-                    rewards["partner"] = WIN
-                elif (self.__winner == 2):
-                    rewards["default"] = WIN
-                    rewards["partner"] = LOSE
-                elif (self.__winner == 3):
-                    rewards["default"] = DRAW
-                    rewards["partner"] = DRAW
-
-                self.__AiDefault.reward(rewards["default"])
-                self.__AiDefault.new_game()
-
-                self.__AiTrainPartner.reward(rewards["partner"])
-                self.__AiTrainPartner.new_game()
-
-                if (self.__game_number % self.__AiDefault.batch_size == 0):
-                    print("Learning....")
-                    self.__AiDefault.train()
-                    self.__AiTrainPartner.train()
-
-                self.__winner = 0
-                self.__turn_counter = 0
-                self.__player = 1
-                self.__board_snapshot = np.zeros((self.__board_size,self.__board_size), dtype=np.int8)
-                self.__game_number += 1
-
-                if (self.__gui): self.__reset_mainwindow()
+                self.__reset_game()
 
     def __check_ai_turn(self):
         return re.match(r"ai(\d)?", self.__player_names[self.__player-1].lower())
@@ -71,12 +78,12 @@ class Gomoku():
         for i in range(0,size**2):
             x = i % size
             y =int(i / size)
-            self.__board[x][y].config(text="",background="SystemButtonFace")
+            self.__board[x][y].config(text="",background="SystemButtonFace", state=NORMAL)
 
     def __render_mainwindow(self):
         self.__mainwindow = Tk()
         self.__mainwindow.title("Gomoku")
-        
+
         # Creating labels
         self.__status = Label(self.__mainwindow,text=self.__player_names[self.__player-1])
         self.__turn_counter_label = Label(self.__mainwindow,text="{}. Turns taken".format(self.__turn_counter))
@@ -161,7 +168,7 @@ class Gomoku():
         # This will cause stackoverflow in training.
         if (self.__state == PLAY and self.__check_ai_turn()):
              self.__ai_turn()
-            
+
 
     def __check_win_condition(self,token,coordinate):
         """
@@ -248,7 +255,7 @@ class Gomoku():
         Pop up winner
         """
         self.__winner = self.__player
-        
+
         # Update label
         if (self.__gui):
             self.__turn_counter_label["text"] = self.__player_names[self.__player-1] + " won!"
@@ -262,9 +269,11 @@ class Gomoku():
             self.__turn_counter_label.update()
 
         # Declare winner
-        if (self.__state == PLAY): showerror("Winner", self.__player_names[self.__player-1] + " won!")
+        if (self.__state == PLAY):
+            showerror("Winner", self.__player_names[self.__player-1] + " won!")
+            self.__reset_game()
 
 if __name__ == "__main__":
-    Ai1=Ai(keep_prob=.6, greedy=False, epsilon=0.5)
-    Ai2=Ai(keep_prob=.6, greedy=False, epsilon=0.5)
+    Ai1=Ai(keep_prob=.6, greedy=False, epsilon=.2)
+    Ai2=Ai(keep_prob=.6, greedy=False, epsilon=.2)
     Gomoku(size=25, state=TRAIN, AiDefault=Ai1, AiTrainPartner=Ai2, gui=False)

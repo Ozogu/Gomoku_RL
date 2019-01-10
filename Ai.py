@@ -8,7 +8,7 @@ import time
 from shared import LOSE, WIN, DRAW
 
 class Ai():
-    def __init__(self, keep_prob = 1, greedy=True, epsilon=0, verbose=False):
+    def __init__(self, keep_prob = 1, greedy=True, epsilon=0, verbose=False, learnign_rate=0.00001, batch_size=1, epochs=1):
         assert(greedy in (True, False))
         assert(verbose in (True, False))
         assert(0 <= keep_prob <= 1)
@@ -16,12 +16,12 @@ class Ai():
 
         # Discount factor
         self.__gamma = 0.99
-        self.__learning_rate = 0.00001
+        self.__learning_rate = learnign_rate
         self.__keep_prob = keep_prob
         self.__greedy = greedy
-        self.__epochs = 1
+        self.__epochs = epochs
         self.__epsilon = epsilon
-        self.batch_size = 128 # Public
+        self.batch_size = batch_size
 
         self.__episodes = []
         self.__episode = { "observations": [], "actions": [], "reward": 0 }
@@ -55,19 +55,19 @@ class Ai():
                         self.__dropout: self.__keep_prob
                     }
                 )
-        
+
         self.__save_model()
         self.__episodes = []
 
     def predict(self, data):
         input_board, output_board = self.__preprocess(data)
         prediction = self.__session.run(self.__softmax, { self.__input: input_board })
-        best_valid_index = self.__best_valid_prediction(prediction, output_board)
-        coordinates = self.__index_to_coordinates(best_valid_index)        
+        index = self.__index_from_prediction(prediction, output_board)
+        coordinates = self.__index_to_coordinates(index)
 
         self.__episode["observations"].append(input_board)
-        action = np.zeros(self.__board_size**2)
-        action[best_valid_index] = 1
+        action = np.zeros(self.__board_size**2, dtype=np.uint8)
+        action[index] = 1
         self.__episode["actions"].append(action)
 
         if (self.__verbose):
@@ -99,11 +99,11 @@ class Ai():
         for index, reward in enumerate(rewards):
             cumulative = cumulative * self.__gamma + reward
             discounted_rewards[index] = cumulative
-			
+
         discounted_rewards = np.flip(discounted_rewards)
 
         return discounted_rewards
-    
+
     def __index_to_coordinates(self, index):
         size = self.__board_size
         c = {
@@ -117,7 +117,7 @@ class Ai():
 
         return c
 
-    def __best_valid_prediction(self, prediction, board):
+    def __index_from_prediction(self, prediction, board):
         # Remove invalid actions
         # prediction[board != 0] = 0
 
@@ -167,7 +167,7 @@ class Ai():
         output_board = np.reshape(board, (1, self.__board_size**2))
 
         return input_board, output_board
-        
+
 
     def __architechture(self):
         self.__input = tf.placeholder(shape=(None, self.__board_size, self.__board_size, 1), dtype=tf.float32)
@@ -178,14 +178,17 @@ class Ai():
         layer_1 = tf.layers.conv2d(self.__input, filters=32, kernel_size=10, activation=tf.nn.relu, padding='valid')
         layer_1 = tf.layers.dropout(layer_1, self.__dropout)
 
-        layer_2 = tf.layers.conv2d(layer_1, filters=16, kernel_size=5, activation=tf.nn.relu, padding='valid')
+        layer_2 = tf.layers.conv2d(layer_1, filters=32, kernel_size=5, activation=tf.nn.relu, padding='valid')
         layer_2 = tf.layers.dropout(layer_2, self.__dropout)
 
-        layer_3 = tf.layers.flatten(layer_2)
-        layer_3 = tf.layers.dense(layer_3, 1024, tf.nn.relu)
+        layer_3 = tf.layers.conv2d(layer_2, filters=32, kernel_size=3, activation=tf.nn.relu, padding='valid')
         layer_3 = tf.layers.dropout(layer_3, self.__dropout)
 
-        self.__layer_out = tf.layers.dense(layer_3, self.__board_size**2, activation=None)
+        layer_4 = tf.layers.flatten(layer_3)
+        layer_4 = tf.layers.dense(layer_4, 1024, tf.nn.relu)
+        layer_4 = tf.layers.dropout(layer_4, self.__dropout)
+
+        self.__layer_out = tf.layers.dense(layer_4, self.__board_size**2, activation=None)
         self.__softmax = tf.nn.softmax(self.__layer_out)
 
         x_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.__layer_out, labels=self.__output)
@@ -201,13 +204,13 @@ class Ai():
             if self.__saver is None:
                 self.__saver = tf.train.import_meta_graph(self.__model_path + self.__model_name + '.meta')
             self.__saver.restore(self.__session, tf.train.latest_checkpoint(self.__model_path))
-            
+
             # save variables
             self.__input = tf.get_collection("input")[0]
-            self.__output = tf.get_collection("output")[0] 
-            self.__rewards = tf.get_collection("rewards")[0] 
-            self.__layer_out = tf.get_collection("output_layer")[0] 
-            self.__softmax = tf.get_collection("scaled_output")[0] 
+            self.__output = tf.get_collection("output")[0]
+            self.__rewards = tf.get_collection("rewards")[0]
+            self.__layer_out = tf.get_collection("output_layer")[0]
+            self.__softmax = tf.get_collection("scaled_output")[0]
             self.__loss = tf.get_collection("loss")[0]
             self.__training_optimizer = tf.get_collection('optimizer')[0]
             self.__dropout =tf.get_collection('dropout')[0]
@@ -220,12 +223,12 @@ class Ai():
     def __save_model(self, save_meta=False):
         if self.__saver is None:
             self.__saver = tf.train.Saver()
-        tf.add_to_collection("input", self.__input) 
-        tf.add_to_collection("output", self.__output) 
-        tf.add_to_collection("rewards", self.__rewards) 
-        tf.add_to_collection("output_layer", self.__layer_out) 
-        tf.add_to_collection("scaled_output", self.__softmax) 
-        tf.add_to_collection("loss", self.__loss) 
+        tf.add_to_collection("input", self.__input)
+        tf.add_to_collection("output", self.__output)
+        tf.add_to_collection("rewards", self.__rewards)
+        tf.add_to_collection("output_layer", self.__layer_out)
+        tf.add_to_collection("scaled_output", self.__softmax)
+        tf.add_to_collection("loss", self.__loss)
         tf.add_to_collection('optimizer', self.__training_optimizer)
         tf.add_to_collection('dropout', self.__dropout)
 
