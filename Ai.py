@@ -12,6 +12,9 @@ class Ai():
     def new_game(self):
         pass
 
+    def train(self):
+        pass
+
     def reward(self, reward):
         pass
 

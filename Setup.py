@@ -102,8 +102,8 @@ class Setup():
         self.gui = self.__gui_checkbox_var.get()
         self.keep_prob = float(self.__keep_prob.get())
         self.approach = self.__approach_radio_var.get()
-        self.state = str(self.__state_radio_var.get())[0]
-        self.opponent = str(self.__state_radio_var.get())[1]
+        self.state = int(str(self.__state_radio_var.get())[0])
+        self.opponent = int(str(self.__state_radio_var.get())[1])
         self.epsilon = float(self.__epsilon.get())
         self.verbose = self.__verbose_checkbox_var.get()
         self.success = True
@@ -114,8 +114,8 @@ if __name__ == "__main__":
     setup = Setup()
     Ai1 = None
     Ai2 = None
-    if int(setup.state) == PLAY:
-        if int(setup.opponent) == AGAINST_AI:
+    if setup.state == PLAY:
+        if setup.opponent == AGAINST_AI:
             Ai1 = Ai()
         else:
             Ai1 = Nn(keep_prob=setup.keep_prob, greedy=setup.approach,
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     else:
         Ai1 = Nn(keep_prob=setup.keep_prob, greedy=setup.approach,
                        verbose=setup.verbose, epsilon=setup.epsilon)
-        if int(setup.opponent) == AGAINST_AI:
+        if setup.opponent == AGAINST_AI:
             Ai2 = Ai()
         else:
             Ai2 = Nn(keep_prob=setup.keep_prob, greedy=setup.approach,
