@@ -5,6 +5,11 @@ from tkinter.messagebox import showerror
 from shared import TRAIN, PLAY, GREEDY, BOLTZMANN
 from Gomoku import Gomoku
 from Ai import Ai
+from Nn import Nn
+
+AGAINST_AI = 1
+AGAINST_NN = 2
+
 
 class Setup():
     def __init__(self):
@@ -41,15 +46,19 @@ class Setup():
         self.__verbose_label = Label(self.__verbose_frame, text="Verbose")
         self.__verbose_checkbox = Checkbutton(self.__verbose_frame, variable=self.__verbose_checkbox_var)
 
-        self.__state_frame = Frame(self.__window)
-        self.__train__radio = Radiobutton(self.__state_frame, text="train", variable=self.__state_radio_var, value=TRAIN)
-        self.__play__radio = Radiobutton(self.__state_frame, text="play", variable=self.__state_radio_var, value=PLAY)
+        self.__train_state_frame = Frame(self.__window)
+        self.__train_nn_radio = Radiobutton(self.__train_state_frame, text="train against nn", variable=self.__state_radio_var, value=str(TRAIN) +str(AGAINST_NN))
+        self.__train_ai_radio = Radiobutton(self.__train_state_frame, text="train against ai", variable=self.__state_radio_var, value=str(TRAIN) +str(AGAINST_AI))
+
+        self.__play_state_frame = Frame(self.__window)
+        self.__play_nn_radio = Radiobutton(self.__play_state_frame, text="play against nn", variable=self.__state_radio_var, value=str(PLAY) + str(AGAINST_NN))
+        self.__play_ai_radio = Radiobutton(self.__play_state_frame, text="play against ai", variable=self.__state_radio_var, value=str(PLAY) + str(AGAINST_AI))
 
         self.__ok_button = Button(self.__window, text="Ok", command=self.confirm)
 
         # Defaults
         self.__gui_checkbox.select()
-        self.__play__radio.select()
+        self.__play_nn_radio.select()
         self.__greedy_radio.select()
         self.__epsilon.insert(0,'0')
         self.__keep_prob.insert(0,'1')
@@ -75,9 +84,13 @@ class Setup():
         self.__label_gui.pack(side=LEFT)
         self.__gui_checkbox.pack(side=RIGHT)
 
-        self.__state_frame.pack(fill=X)
-        self.__train__radio.pack(side=LEFT)
-        self.__play__radio.pack(side=RIGHT)
+        self.__train_state_frame.pack(fill=X)
+        self.__train_nn_radio.pack(side=LEFT)
+        self.__train_ai_radio.pack(side=RIGHT)
+
+        self.__play_state_frame.pack(fill=X)
+        self.__play_nn_radio.pack(side=LEFT)
+        self.__play_ai_radio.pack(side=RIGHT)
         self.__ok_button.pack()
 
         # Hotkeys
@@ -89,7 +102,8 @@ class Setup():
         self.gui = self.__gui_checkbox_var.get()
         self.keep_prob = float(self.__keep_prob.get())
         self.approach = self.__approach_radio_var.get()
-        self.state = self.__state_radio_var.get()
+        self.state = str(self.__state_radio_var.get())[0]
+        self.opponent = str(self.__state_radio_var.get())[1]
         self.epsilon = float(self.__epsilon.get())
         self.verbose = self.__verbose_checkbox_var.get()
         self.success = True
@@ -98,6 +112,21 @@ class Setup():
 
 if __name__ == "__main__":
     setup = Setup()
-    Ai1 = Ai(keep_prob=setup.epsilon, greedy=setup.approach, verbose=setup.verbose)
-    Ai2 = Ai(keep_prob=setup.epsilon, greedy=setup.approach, verbose=setup.verbose)
+    Ai1 = None
+    Ai2 = None
+    if int(setup.state) == PLAY:
+        if int(setup.opponent) == AGAINST_AI:
+            Ai1 = Ai()
+        else:
+            Ai1 = Nn(keep_prob=setup.keep_prob, greedy=setup.approach,
+                           verbose=setup.verbose, epsilon=setup.epsilon)
+    else:
+        Ai1 = Nn(keep_prob=setup.keep_prob, greedy=setup.approach,
+                       verbose=setup.verbose, epsilon=setup.epsilon)
+        if int(setup.opponent) == AGAINST_AI:
+            Ai2 = Ai()
+        else:
+            Ai2 = Nn(keep_prob=setup.keep_prob, greedy=setup.approach,
+                           verbose=setup.verbose, epsilon=setup.epsilon)
+
     Gomoku(size=25, state=setup.state, AiDefault=Ai1, AiTrainPartner=Ai2, gui=setup.gui)
