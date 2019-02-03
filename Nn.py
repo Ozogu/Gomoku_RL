@@ -124,6 +124,7 @@ class Nn():
     def __action_from_prediction(self, board, prediction):
         assert(board.shape == (1,625))
         assert(prediction.shape == (1,625))
+        prediction[board != 0] = 0
         action = 0
         if (self.__greedy):
             # Take first best
@@ -132,7 +133,8 @@ class Nn():
             indexes = np.where(prediction == np.max(prediction))[1]
             action = np.random.choice(indexes)
         elif (self.__epsilon <= random.random()):
-            normalized = prediction[0]/prediction[0].sum()
+            prediction_sum = prediction[0].sum()
+            normalized = prediction[0]/prediction_sum
             # Boltzman approach
             action = np.random.choice(list(range(normalized.size)), p=normalized)
         else: # e-greedy approach
