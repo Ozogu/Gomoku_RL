@@ -322,6 +322,6 @@ class Gomoku():
             self.__reset_game()
 
 if __name__ == "__main__":
-    Ai1=Nn(keep_prob=.6, greedy=False, epsilon=.2, batch_size=64, epochs=10)
-    Ai2=Nn(keep_prob=.6, greedy=False, epsilon=.2, batch_size=64, epochs=10)
+    Ai1=Nn(keep_prob=.9, greedy=False, epsilon=.2, batch_size=64, epochs=10)
+    Ai2=Nn(keep_prob=.9, greedy=False, epsilon=.2, batch_size=64, epochs=10)
     Gomoku(size=25, state=TRAIN, AiDefault=Ai1, AiTrainPartner=Ai2, gui=False)

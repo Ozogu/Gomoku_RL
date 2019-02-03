@@ -132,9 +132,9 @@ class Nn():
             indexes = np.where(prediction == np.max(prediction))[1]
             action = np.random.choice(indexes)
         elif (self.__epsilon <= random.random()):
-            # normalized = prediction[0]/prediction[0].sum()
+            normalized = prediction[0]/prediction[0].sum()
             # Boltzman approach
-            action = np.random.choice(list(range(prediction.size)), p=prediction[0])
+            action = np.random.choice(list(range(normalized.size)), p=normalized)
         else: # e-greedy approach
             action = np.random.choice(np.where(board == 0)[1])
 
@@ -188,7 +188,7 @@ class Nn():
 
     def __architechture(self):
         self.__input = tf.placeholder(shape=(None, self.__board_size, self.__board_size, 9), dtype=tf.float32)
-        self.__output = tf.placeholder(shape=(None, self.__board_size**2), dtype=tf.int32)
+        self.__output = tf.placeholder(shape=(None, self.__board_size**2), dtype=tf.float32)
         self.__rewards = tf.placeholder(shape=(None,), dtype=tf.float32)
         self.__dropout = tf.placeholder(dtype=tf.float32)
 
@@ -208,7 +208,7 @@ class Nn():
         self.__layer_out = tf.layers.dense(layer_4, self.__board_size**2, activation=None)
         self.__softmax = tf.nn.softmax(self.__layer_out)
 
-        x_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.__layer_out, labels=self.__output)
+        x_entropy = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.__layer_out, labels=self.__output)
         self.__loss = tf.reduce_mean(self.__rewards * x_entropy)
         self.__training_optimizer = tf.train.AdamOptimizer(self.__learning_rate).minimize(self.__loss)
 
